@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Network Traffic Congestion Monitoring and Optimization Visualizer</title>
+<meta name="description" content="Web dashboard of the Network Traffic Congestion Monitoring and Optimization Visualizer: congestion detection, optimization recommendations and traffic charts.">
+<style>
+  :root{--accent:#EA580C;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--card:#ffffff;--bg:#f8fafc;
+        --ok:#15803d;--okbg:#dcfce7;--mod:#b45309;--modbg:#fef3c7;--bad:#b91c1c;--badbg:#fee2e2;--down:#2563eb;--up:#ea580c}
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  .layout{display:grid;grid-template-columns:290px minmax(0,1fr);min-height:100vh}
+  aside{background:#fff;border-right:1px solid var(--line);padding:20px 18px;position:sticky;top:0;height:100vh;overflow:auto}
+  aside h2{font-size:1.05rem;margin:0 0 14px} label{display:block;font-size:.85rem;font-weight:600;margin:14px 0 6px}
+  .hint{font-size:.75rem;color:var(--muted);margin-top:4px;line-height:1.35}
+  select,input[type=number]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:.9rem;background:#fff}
+  input[type=range]{width:100%} .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .toggle{display:flex;align-items:center;gap:8px;font-weight:500;font-size:.88rem;margin-top:12px;cursor:pointer}
+  hr{border:none;border-top:1px solid var(--line);margin:16px 0}
+  button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 10px;font-size:.85rem;cursor:pointer;font-weight:600}
+  button:hover{border-color:var(--accent);color:var(--accent)} button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  main{padding:20px 26px 60px;max-width:1300px;width:100%}
+  .hero{background:linear-gradient(135deg,var(--accent),#111827);color:#fff;border-radius:18px;padding:22px 26px;margin-bottom:16px}
+  .hero h1{margin:0;font-size:1.55rem} .hero p{margin:.4rem 0 0;opacity:.9}
+  .banner{border-radius:10px;padding:10px 14px;font-size:.9rem;margin-bottom:14px;border:1px solid}
+  .banner.info{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a} .banner.ok{background:var(--okbg);border-color:#86efac;color:#14532d}
+  .grid{display:grid;gap:14px} .g2{grid-template-columns:1fr 1fr} .g12{grid-template-columns:1fr 2fr}
+  .tw{overflow-x:auto} .grid>*{min-width:0} .card{min-width:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .card h3{margin:0 0 12px;font-size:1rem}
+  .level{border-radius:12px;padding:14px 18px;font-size:1.3rem;font-weight:800;margin-bottom:10px}
+  .bar{height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden} .bar>div{height:100%;background:var(--accent);transition:width .4s}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px} .metrics.t2{grid-template-columns:repeat(2,1fr);margin-top:10px}
+  .metric{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .metric .k{font-size:.75rem;color:var(--muted)} .metric .v{font-size:1.3rem;font-weight:700;margin-top:2px} .metric .s{font-size:.75rem;color:var(--muted)}
+  ul.recs{margin:0;padding-left:18px} ul.recs li{margin:6px 0;font-size:.92rem}
+  .pr{display:inline-block;font-size:.7rem;font-weight:700;border-radius:6px;padding:1px 6px;margin-right:6px}
+  .pr.High{background:var(--badbg);color:var(--bad)} .pr.Medium{background:var(--modbg);color:var(--mod)} .pr.Low{background:#e2e8f0;color:#334155}
+  canvas{width:100%;height:240px;display:block}
+  table{width:100%;border-collapse:collapse;font-size:.85rem} th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)} th{background:var(--bg)}
+  .counts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+  .foot{color:var(--muted);font-size:.8rem;margin-top:14px}
+  details{margin-top:16px} summary{cursor:pointer;font-weight:700}
+  code{background:#f1f5f9;padding:1px 5px;border-radius:5px}
+  @media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)} aside{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+    .g2,.g12{grid-template-columns:1fr} .metrics{grid-template-columns:repeat(2,1fr)} main{padding:14px}}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside>
+  <h2>⚙️ Controls</h2>
+  <label for="source">Traffic source</label>
+  <select id="source">
+    <option value="sim">Simulated (demo)</option>
+    <option value="replay">Replay: recorded live test (90 samples)</option>
+  </select>
+  <div class="hint" id="sourceHint"></div>
+  <label class="toggle"><input type="checkbox" id="heavy"> Simulate heavy load</label>
+  <hr>
+  <label for="cap">Link capacity (Mbps)</label>
+  <input type="number" id="cap" min="0.1" max="10000" step="1" value="10">
+  <div class="hint">Bandwidth of the monitored link, e.g. the lab internet link.</div>
+  <label>Thresholds (% of capacity)</label>
+  <div class="row2">
+    <div><div class="hint">Moderate ≥</div><input type="number" id="tmod" min="1" max="100" value="50"></div>
+    <div><div class="hint">Congested &gt;</div><input type="number" id="tcong" min="1" max="100" value="80"></div>
+  </div>
+  <hr>
+  <label class="toggle"><input type="checkbox" id="auto" checked> Auto-refresh</label>
+  <label for="interval">Refresh interval: <span id="ivl">2</span> s</label>
+  <input type="range" id="interval" min="1" max="10" value="2">
+  <label class="toggle"><input type="checkbox" id="logon" checked> Save samples to log</label>
+  <div class="row2" style="margin-top:14px">
+    <button id="reset">Reset history</button><button id="clear">Clear log</button>
+  </div>
+  <button class="primary" id="step" style="width:100%;margin-top:8px">Take one sample now</button>
+</aside>
+
+<main>
+  <div class="hero">
+    <h1>📈 Network Traffic Congestion Monitoring and Optimization Visualizer</h1>
+    <p>Throughput, packet flow, congestion level and optimization recommendations</p>
+  </div>
+  <div class="banner info" id="banner"></div>
+
+  <div class="grid g12">
+    <div class="card">
+      <h3>🚦 Congestion status</h3>
+      <div id="levelBox" class="level">Collecting the first sample…</div>
+      <div class="metric" style="margin-bottom:10px"><div class="k">Link utilisation</div><div class="v" id="util">0.0 %</div></div>
+      <div class="bar"><div id="utilBar" style="width:0%"></div></div>
+      <div class="hint" id="capNote"></div>
+    </div>
+    <div class="card">
+      <h3>🛠️ Optimization recommendations</h3>
+      <ul class="recs" id="recs"></ul>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h3>📊 Live throughput</h3>
+    <div class="metrics">
+      <div class="metric"><div class="k">Download now</div><div class="v" id="mDown">0.0 KB/s</div><div class="s" id="mDownM">0.00 Mbps</div></div>
+      <div class="metric"><div class="k">Upload now</div><div class="v" id="mUp">0.0 KB/s</div><div class="s" id="mUpM">0.00 Mbps</div></div>
+      <div class="metric"><div class="k">Peak download</div><div class="v" id="mPD">0.0 KB/s</div></div>
+      <div class="metric"><div class="k">Peak upload</div><div class="v" id="mPU">0.0 KB/s</div></div>
+    </div>
+    <div class="metrics t2">
+      <div class="metric"><div class="k">Total received</div><div class="v" id="mTR">0 B</div></div>
+      <div class="metric"><div class="k">Total sent</div><div class="v" id="mTS">0 B</div></div>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>📈 Throughput over time (KB/s)</h3><canvas id="cThr"></canvas></div>
+    <div class="card"><h3>📉 Link utilisation over time (%)</h3><canvas id="cUtil"></canvas></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>📦 Packet flow (packets/s, latest)</h3><canvas id="cPkt"></canvas></div>
+    <div class="card"><h3>🔌 Per-interface totals</h3><div class="hint" id="ifaceNote"></div>
+      <div class="tw"><table><thead><tr><th>Interface</th><th>Sent</th><th>Received</th><th>Total</th></tr></thead><tbody id="iface"></tbody></table></div></div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h3>🗂️ Congestion event log</h3>
+    <div class="counts">
+      <div class="metric"><div class="k">Normal samples</div><div class="v" id="cN">0</div></div>
+      <div class="metric"><div class="k">Moderate samples</div><div class="v" id="cM">0</div></div>
+      <div class="metric"><div class="k">Congested samples</div><div class="v" id="cC">0</div></div>
+    </div>
+    <div class="tw"><table><thead><tr><th>Time</th><th>Download (KB/s)</th><th>Upload (KB/s)</th><th>Utilisation (%)</th><th>Level</th><th>Source</th></tr></thead><tbody id="events"></tbody></table></div>
+    <div id="noEvents" class="hint">No Moderate or Congested events recorded yet.</div>
+    <button id="csv" style="margin-top:12px">Download traffic log (CSV)</button>
+  </div>
+
+  <div class="foot" id="foot"></div>
+
+  <details class="card" style="margin-top:14px">
+    <summary>About this page and how to run live monitoring</summary>
+    <p>This page is the web (GitHub Pages) edition of the <b>Network Traffic Congestion Monitoring and Optimization Visualizer</b>, developed by Uwaegbulam Ugochi Racheal (2026). It uses the same rate computation, congestion classification and recommendation rules as the Python system (<code>core.py</code>).</p>
+    <p>A web page cannot read a computer's network interface counters, so this edition offers two data sources: a <b>simulated demo</b> and a <b>replay of the controlled live test</b>, which plays back the 90 samples the Python system actually recorded while traffic was generated at known rates of 400, 800 and 1,200 KB/s (expected levels: Normal, Moderate, Congested on a 10 Mbps link).</p>
+    <p><b>Live monitoring</b> of a real computer runs with the Python application in this repository:</p>
+    <p><code>pip install -r requirements.txt</code> then <code>streamlit run app.py</code> (or double-click <code>start.bat</code> on Windows). The dashboard opens at <code>http://localhost:8501</code>.</p>
+  </details>
+</div>
+</main>
+</div>
+
+<script>
+// ---------------- Data: replay of the controlled live test (recorded by core.py) ----------------
+const REPLAY = {"rows":[[2.0,1.08,0.87,6.0,5.5,0.0],[4.0,0.08,0.05,1.0,0.5,0.0],[6.0,0.0,0.0,0.0,0.0,0.0],[8.0,0.0,0.0,0.0,0.0,0.0],[10.0,0.0,0.0,0.0,0.0,0.0],[12.0,0.0,0.0,0.0,0.0,0.0],[14.0,0.43,2.81,2.5,2.5,0.0],[16.0,0.0,0.0,0.0,0.0,0.0],[18.0,0.23,0.25,3.0,4.5,0.0],[20.0,0.08,0.08,1.0,1.5,0.0],[22.0,7.06,5.21,13.0,13.5,0.0],[24.0,0.08,0.05,1.0,0.5,0.0],[26.0,0.0,0.0,0.0,0.0,0.0],[28.0,0.0,0.0,0.0,0.0,0.0],[30.0,8.09,8.09,2.0,2.0,7.99],[32.0,404.71,404.82,101.4,101.4,399.48],[34.0,404.62,404.62,99.9,99.9,399.55],[36.0,405.58,405.59,106.9,106.4,399.59],[38.0,408.74,408.74,100.9,100.9,403.62],[40.0,404.61,404.61,99.9,99.9,399.54],[42.0,404.72,404.72,99.9,99.9,399.64],[44.0,404.98,404.96,103.9,103.4,399.63],[46.1,404.64,404.64,99.9,99.9,399.57],[48.1,404.55,404.55,99.9,99.9,399.48],[50.1,404.74,404.74,99.9,99.9,399.67],[52.1,405.07,405.99,102.4,102.4,399.52],[54.1,404.55,404.55,99.9,99.9,399.47],[56.1,404.71,404.71,99.9,99.9,403.63],[58.1,408.7,408.7,100.9,100.9,399.59],[60.1,404.69,404.69,99.9,99.9,399.62],[62.1,404.76,404.86,101.4,101.4,399.53],[64.1,404.61,404.61,100.9,100.9,399.46],[66.1,404.58,404.58,99.9,99.9,399.51],[68.1,404.66,404.66,99.9,99.9,399.59],[70.1,421.57,421.58,110.8,110.3,415.38],[72.1,808.79,808.84,200.6,201.6,802.56],[74.1,813.0,813.0,201.7,201.7,798.74],[76.1,808.9,808.9,199.7,199.7,798.76],[78.1,808.78,808.78,199.7,199.7,802.64],[80.1,812.97,812.97,200.7,200.7,798.78],[82.1,810.02,810.81,204.2,204.7,798.97],[84.1,809.02,809.02,200.7,200.7,798.8],[86.1,809.26,809.26,199.8,199.8,803.11],[88.1,812.94,812.94,200.7,200.7,798.76],[90.1,808.97,808.97,199.7,199.7,798.83],[92.1,809.35,809.46,201.3,201.3,799.05],[94.1,808.88,808.88,199.7,199.7,802.74],[96.1,812.95,812.95,200.7,200.7,798.77],[98.1,808.85,808.85,199.7,199.7,798.71],[100.1,815.68,813.85,212.1,212.1,802.63],[102.1,812.78,812.78,200.6,200.6,798.6],[104.1,808.86,808.83,201.6,201.1,798.57],[106.1,809.99,810.03,208.2,208.2,802.83],[108.1,812.83,812.83,200.7,200.7,798.65],[110.1,836.75,836.75,206.6,206.6,826.26],[112.1,1213.36,1214.64,300.5,300.5,1201.82],[114.1,1216.38,1216.38,300.3,300.3,1201.13],[116.2,1217.63,1217.63,300.6,300.6,1198.37],[118.2,1213.27,1213.27,299.5,299.5,1198.06],[120.2,1217.5,1217.5,300.6,300.6,1202.24],[122.2,1213.45,1213.56,301.0,301.0,1198.08],[124.2,1213.61,1213.58,300.6,300.1,1202.31],[126.2,1217.83,1217.83,300.6,300.6,1198.57],[128.2,1213.81,1213.81,299.6,299.6,1202.59],[130.2,1217.77,1217.88,301.6,301.6,1198.38],[132.2,1213.59,1213.59,300.1,300.1,1202.35],[134.2,1216.77,1216.78,301.4,301.4,1197.45],[136.2,1213.61,1213.61,299.6,299.6,1198.4],[138.2,1213.29,1213.29,299.5,299.5,1202.07],[140.2,1218.72,1218.79,307.1,307.6,1198.57],[142.2,1213.44,1213.44,299.6,299.6,1202.22],[144.2,1217.66,1217.63,301.6,301.1,1198.32],[146.2,1214.17,1214.69,303.1,303.1,1202.3],[148.2,1217.39,1217.39,300.5,300.5,1198.14],[150.2,1092.09,1092.09,269.6,269.6,1078.4],[152.2,0.16,0.27,1.5,1.5,0.0],[154.2,6.98,5.11,12.5,12.5,0.0],[156.2,0.0,0.0,0.0,0.0,0.0],[158.2,0.0,0.0,0.0,0.0,0.0],[160.2,0.0,0.0,0.0,0.0,0.0],[162.2,0.0,0.0,0.0,0.0,0.0],[164.2,0.15,0.13,2.0,1.5,0.0],[166.2,0.1,0.1,1.5,1.5,0.0],[168.2,0.0,0.0,0.0,0.0,0.0],[170.2,0.0,0.0,0.0,0.0,0.0],[172.3,0.03,0.03,0.5,0.5,0.0],[174.3,0.0,0.0,0.0,0.0,0.0],[176.3,1.24,2.54,8.0,8.0,0.0],[178.3,0.0,0.0,0.0,0.0,0.0],[180.3,0.08,0.08,1.5,1.5,0.0]],"iface":[["lo",99658645,99658645],["ifb0",0,0],["ifb1",0,0],["eth0",112922,140531]]};  // rows: [t, down_kb, up_kb, pkt_recv, pkt_sent, generated_kbps]
+
+// ---------------- Logic (ported from core.py) ----------------
+const MAX_POINTS = 60, KB = 1024, MB = 1024 * 1024;
+const NORMAL = 'Normal', MODERATE = 'Moderate', CONGESTED = 'Congested';
+const kbpsToMbps = r => r * KB * 8 / 1e6;
+const utilisationPercent = (r, cap) => (!cap || cap <= 0) ? 0 : kbpsToMbps(Math.max(r, 0)) / cap * 100;
+function classify(u, mod, cong) { if (u > cong) return CONGESTED; if (u >= mod) return MODERATE; return NORMAL; }
+function humanBytes(n) {
+  n = Number(n); if (!isFinite(n)) return '0 B';
+  if (n < KB) return n.toFixed(0) + ' B'; if (n < MB) return (n / KB).toFixed(1) + ' KB';
+  if (n < MB * KB) return (n / MB).toFixed(2) + ' MB'; return (n / (MB * KB)).toFixed(2) + ' GB';
+}
+function recommend(level, busiest, direction) {
+  const iface = busiest ? ` on interface '${busiest}'` : '';
+  if (level === CONGESTED) return [
+    [`Identify and rate-limit the heaviest ${direction} users${iface} (traffic shaping).`, 'High'],
+    ['Enable QoS priority for real-time traffic (VoIP, video conferencing, e-learning).', 'High'],
+    ['Postpone large downloads, updates and backups to off-peak hours.', 'High'],
+    ['Balance load across an alternative link or access point if available.', 'Medium'],
+    ['If congestion persists daily, plan a bandwidth upgrade for this link.', 'Medium']];
+  if (level === MODERATE) return [
+    [`Watch the trend${iface}: utilisation is approaching the congestion threshold.`, 'Medium'],
+    ['Schedule bandwidth-intensive tasks (updates, backups) for off-peak hours.', 'Medium'],
+    ['Check for unexpected heavy users or applications (streaming, file sharing).', 'Low']];
+  return [['No action required: traffic is within normal limits.', 'Low']];
+}
+// Simulated Traffic Generator: same model as core.simulated_counters (rates per second, real elapsed time)
+const sim = { bytes_sent: 5e6, bytes_recv: 2e7, packets_sent: 40000, packets_recv: 90000, t: 0, last: null };
+function simulatedRates(dt, heavy) {
+  sim.t += dt; const wave = (Math.sin(sim.t / 8) + 1) / 2, f = heavy ? 3 : 1, rnd = (a) => Math.random() * a;
+  const down = (20000 + wave * 300000 + rnd(60000)) * f, up = (8000 + wave * 90000 + rnd(20000)) * f;
+  const pd = (60 + wave * 400 + rnd(80)) * f, pu = (30 + wave * 160 + rnd(40)) * f;
+  sim.bytes_recv += down * dt; sim.bytes_sent += up * dt; sim.packets_recv += pd * dt; sim.packets_sent += pu * dt;
+  return { down_kb: down / KB, up_kb: up / KB, pkt_recv: pd, pkt_sent: pu };
+}
+
+// ---------------- State ----------------
+const S = { busiest: '', time: [], down: [], up: [], prc: [], pst: [], util: [], level: NORMAL, recs: recommend(NORMAL), count: 0,
+  replayIdx: 0, totRecv: 0, totSent: 0, log: [], first: true, timer: null };
+const $ = id => document.getElementById(id);
+const push = (a, v) => { a.push(v); if (a.length > MAX_POINTS) a.shift(); };
+const settings = () => ({ source: $('source').value, heavy: $('heavy').checked, cap: parseFloat($('cap').value) || 10,
+  mod: parseFloat($('tmod').value) || 50, cong: parseFloat($('tcong').value) || 80, interval: +$('interval').value,
+  auto: $('auto').checked, logon: $('logon').checked });
+
+function ifaceRows(src) {
+  if (src === 'replay') return REPLAY.iface.map(r => [r[0], r[1], r[2]]);
+  return [['eth0 (sim)', sim.bytes_sent * .70, sim.bytes_recv * .75], ['wlan0 (sim)', sim.bytes_sent * .25, sim.bytes_recv * .20], ['lo (sim)', sim.bytes_sent * .05, sim.bytes_recv * .05]];
+}
+function sample() {
+  const st = settings(); const now = Date.now() / 1000; let r, label;
+  if (st.source === 'replay') {
+    const row = REPLAY.rows[S.replayIdx % REPLAY.rows.length]; S.replayIdx++;
+    r = { down_kb: row[1], up_kb: row[2], pkt_recv: row[3], pkt_sent: row[4] }; label = `t = ${row[0].toFixed(0)} s`;
+    S.totRecv += row[1] * KB * 2; S.totSent += row[2] * KB * 2;
+  } else {
+    if (S.first) { sim.last = now; S.first = false; render(st, null); return; }
+    const dt = Math.min(Math.max(now - sim.last, 0.5), 10); sim.last = now;
+    r = simulatedRates(dt, st.heavy); label = new Date().toLocaleTimeString();
+    S.totRecv = sim.bytes_recv; S.totSent = sim.bytes_sent;
+  }
+  const util = utilisationPercent(Math.max(r.down_kb, r.up_kb), st.cap);
+  const level = classify(util, st.mod, st.cong);
+  const rows = ifaceRows(st.source); const busiest = rows.reduce((a, b) => (b[1] + b[2] > a[1] + a[2] ? b : a))[0];
+  S.busiest = busiest; S.level = level; S.recs = recommend(level, busiest, r.up_kb > r.down_kb ? 'upload' : 'download');
+  push(S.time, label); push(S.down, r.down_kb); push(S.up, r.up_kb); push(S.prc, r.pkt_recv); push(S.pst, r.pkt_sent); push(S.util, util);
+  S.count++;
+  if (st.logon) S.log.push({ ts: new Date().toISOString().replace('T', ' ').slice(0, 19), down: r.down_kb, up: r.up_kb, prc: r.pkt_recv, pst: r.pkt_sent, util, level,
+    src: st.source === 'replay' ? 'Replay (recorded live test)' : 'Simulated' });
+  render(st, r, util, busiest);
+}
+
+// ---------------- Charts (plain canvas, no external libraries) ----------------
+function setupCanvas(c) { const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr; const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); return [g, w, h]; }
+function lineChart(c, series, opts = {}) {
+  const [g, w, h] = setupCanvas(c); const L = 46, R = 10, T = 10, B = 26; g.clearRect(0, 0, w, h);
+  const n = Math.max(...series.map(s => s.data.length), 2);
+  let max = Math.max(opts.minMax || 1, ...series.flatMap(s => s.data)); max = niceMax(max);
+  g.font = '11px system-ui'; g.fillStyle = '#64748b'; g.strokeStyle = '#e2e8f0'; g.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) { const y = T + (h - T - B) * i / 4; g.beginPath(); g.moveTo(L, y); g.lineTo(w - R, y); g.stroke();
+    g.fillText(fmt(max * (1 - i / 4)), 4, y + 4); }
+  g.fillText('older', L, h - 8); g.fillText('newest', w - R - 40, h - 8);
+  for (const s of series) { if (!s.data.length) continue; g.strokeStyle = s.color; g.lineWidth = s.width || 2; g.setLineDash(s.dash || []); g.beginPath();
+    s.data.forEach((v, i) => { const x = L + (w - L - R) * (s.data.length === 1 ? 1 : i / (n - 1)), y = T + (h - T - B) * (1 - v / max); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke(); g.setLineDash([]); }
+  let lx = L + 6; for (const s of series) { if (s.noLegend) continue; g.fillStyle = s.color; g.fillRect(lx, T + 4, 10, 3); g.fillStyle = '#0f172a'; g.fillText(s.name, lx + 14, T + 9); lx += g.measureText(s.name).width + 30; }
+}
+function barChart(c, labels, values, colors) {
+  const [g, w, h] = setupCanvas(c); const L = 46, B = 26, T = 10; g.clearRect(0, 0, w, h);
+  const max = niceMax(Math.max(1, ...values)); g.font = '11px system-ui'; g.strokeStyle = '#e2e8f0'; g.fillStyle = '#64748b';
+  for (let i = 0; i <= 4; i++) { const y = T + (h - T - B) * i / 4; g.beginPath(); g.moveTo(L, y); g.lineTo(w - 10, y); g.stroke(); g.fillText(fmt(max * (1 - i / 4)), 4, y + 4); }
+  const bw = (w - L - 10) / labels.length;
+  labels.forEach((lab, i) => { const v = values[i], bh = (h - T - B) * v / max, x = L + bw * i + bw * .2;
+    g.fillStyle = colors[i]; g.fillRect(x, h - B - bh, bw * .6, bh); g.fillStyle = '#0f172a'; g.fillText(lab, x + bw * .3 - g.measureText(lab).width / 2, h - 8);
+    g.fillText(v.toFixed(1), x + bw * .3 - g.measureText(v.toFixed(1)).width / 2, h - B - bh - 4); });
+}
+const niceMax = m => { const p = Math.pow(10, Math.floor(Math.log10(m))); for (const k of [1, 2, 2.5, 5, 10]) if (k * p >= m) return k * p; return m; };
+const fmt = v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : (v >= 10 ? v.toFixed(0) : v.toFixed(1));
+
+// ---------------- Render ----------------
+const LV = { Normal: ['var(--ok)', 'var(--okbg)', '🟢'], Moderate: ['var(--mod)', 'var(--modbg)', '🟠'], Congested: ['var(--bad)', 'var(--badbg)', '🔴'] };
+function render(st, r, util = 0, busiest = '') {
+  $('banner').innerHTML = st.source === 'replay'
+    ? '▶️ <b>Replay mode:</b> playing back the 90 samples recorded by the Python system in the controlled live test (traffic generated at 0 → 400 → 800 → 1,200 → 0 KB/s). Change the link capacity to see how classification depends on it.'
+    : '🧪 <b>Simulated (demo) mode:</b> values are SIMULATED in the browser. Turn on <i>Simulate heavy load</i> to demonstrate the Moderate and Congested levels. For live monitoring of a real computer, run the Python app (see "About" below).';
+  $('heavy').disabled = st.source !== 'sim';
+  $('sourceHint').textContent = st.source === 'replay' ? 'Real data recorded on the test computer (10 Mbps reference link). The test traffic ran over the loopback interface, so upload equals download.' : 'Browser simulation using the same model as core.py.';
+  $('capNote').textContent = `Capacity ${st.cap} Mbps · Moderate ≥ ${st.mod}% · Congested > ${st.cong}%`;
+  if (!r) { $('levelBox').textContent = 'Collecting the first sample…'; $('levelBox').style.cssText = ''; }
+  else { const [fg, bg, ic] = LV[S.level]; $('levelBox').textContent = `${ic} ${S.level}`; $('levelBox').style.color = fg; $('levelBox').style.background = bg; }
+  $('util').textContent = util.toFixed(1) + ' %'; $('utilBar').style.width = Math.min(util, 100) + '%';
+  $('recs').innerHTML = S.recs.map(([a, p]) => `<li><span class="pr ${p}">${p}</span>${a}</li>`).join('');
+  const ld = S.down.at(-1) || 0, lu = S.up.at(-1) || 0;
+  $('mDown').textContent = ld.toFixed(1) + ' KB/s'; $('mDownM').textContent = kbpsToMbps(ld).toFixed(2) + ' Mbps';
+  $('mUp').textContent = lu.toFixed(1) + ' KB/s'; $('mUpM').textContent = kbpsToMbps(lu).toFixed(2) + ' Mbps';
+  $('mPD').textContent = (S.down.length ? Math.max(...S.down) : 0).toFixed(1) + ' KB/s'; $('mPU').textContent = (S.up.length ? Math.max(...S.up) : 0).toFixed(1) + ' KB/s';
+  $('mTR').textContent = humanBytes(S.totRecv); $('mTS').textContent = humanBytes(S.totSent);
+  lineChart($('cThr'), [{ name: 'Download (KB/s)', data: S.down, color: '#2563eb' }, { name: 'Upload (KB/s)', data: S.up, color: '#ea580c' }]);
+  lineChart($('cUtil'), [{ name: 'Utilisation (%)', data: S.util, color: '#0f172a' },
+    { name: `Moderate (${st.mod}%)`, data: S.util.map(() => st.mod), color: '#d97706', dash: [5, 4], width: 1.5 },
+    { name: `Congested (${st.cong}%)`, data: S.util.map(() => st.cong), color: '#dc2626', dash: [5, 4], width: 1.5 }], { minMax: 100 });
+  barChart($('cPkt'), ['Received', 'Sent'], [S.prc.at(-1) || 0, S.pst.at(-1) || 0], ['#2563eb', '#7c3aed']);
+  const rows = ifaceRows(st.source).sort((a, b) => b[1] + b[2] - a[1] - a[2]);
+  $('ifaceNote').textContent = st.source === 'replay' ? '(interfaces recorded on the test computer)' : '(simulated interfaces)';
+  $('iface').innerHTML = rows.map(([n, s, rc]) => `<tr><td>${n}</td><td>${humanBytes(s)}</td><td>${humanBytes(rc)}</td><td>${humanBytes(s + rc)}</td></tr>`).join('');
+  const cnt = { Normal: 0, Moderate: 0, Congested: 0 }; S.log.forEach(e => cnt[e.level]++);
+  $('cN').textContent = cnt.Normal; $('cM').textContent = cnt.Moderate; $('cC').textContent = cnt.Congested;
+  const ev = S.log.filter(e => e.level !== NORMAL).slice(-20).reverse();
+  $('events').innerHTML = ev.map(e => `<tr><td>${e.ts.slice(11)}</td><td>${e.down.toFixed(2)}</td><td>${e.up.toFixed(2)}</td><td>${e.util.toFixed(2)}</td><td>${e.level}</td><td>${e.src}</td></tr>`).join('');
+  $('noEvents').style.display = ev.length ? 'none' : 'block';
+  $('foot').textContent = `Samples: ${S.count} | Window: last ${MAX_POINTS} samples | Mode: ${st.source === 'replay' ? 'REPLAY (recorded live data)' : 'SIMULATED'} | Busiest interface: ${S.busiest || '-'}`;
+}
+function resetHistory() { for (const k of ['time', 'down', 'up', 'prc', 'pst', 'util']) S[k] = []; S.count = 0; S.replayIdx = 0; S.first = true;
+  S.totRecv = 0; S.totSent = 0; S.busiest = ''; S.level = NORMAL; S.recs = recommend(NORMAL); render(settings(), null); }
+function downloadCSV() {
+  const head = 'LogID,Timestamp,Interface,DownloadKBps,UploadKBps,PacketsRecvPerSec,PacketsSentPerSec,Utilisation,CongestionLevel,DataSource';
+  const lines = S.log.map((e, i) => [i + 1, e.ts, 'All', e.down.toFixed(2), e.up.toFixed(2), e.prc.toFixed(2), e.pst.toFixed(2), e.util.toFixed(2), e.level, e.src].join(','));
+  const blob = new Blob([[head, ...lines].join('\n') + '\n'], { type: 'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'traffic_log.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+function schedule() { clearTimeout(S.timer); const st = settings(); if (st.auto) S.timer = setTimeout(() => { sample(); schedule(); }, st.interval * 1000); }
+
+$('interval').oninput = () => { $('ivl').textContent = $('interval').value; schedule(); };
+$('auto').onchange = schedule;
+$('source').onchange = () => { S.log = []; resetHistory(); sample(); schedule(); };
+['heavy', 'cap', 'tmod', 'tcong'].forEach(id => $(id).onchange = () => render(settings(), S.down.length ? {} : null, S.util.at(-1) || 0));
+$('reset').onclick = resetHistory; $('clear').onclick = () => { S.log = []; render(settings(), S.down.length ? {} : null, S.util.at(-1) || 0); };
+$('step').onclick = () => { sample(); };
+$('csv').onclick = downloadCSV;
+window.addEventListener('resize', () => render(settings(), S.down.length ? {} : null, S.util.at(-1) || 0));
+render(settings(), null); sample(); schedule();
+</script>
+</body>
+</html>
